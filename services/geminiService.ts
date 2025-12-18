@@ -1,63 +1,69 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { GenerateRequest, GenerateResult } from "../types";
-import { stripCodeFences } from "../utils";
+import { stripCodeFences, extractJson } from "../utils";
 
-const SYSTEM_PROMPT_RU = `ПРОМПТ ДЛЯ GEMINI 3 FLASH — “VIDEO SCRIPT ENGINE (FAST & ACCURATE)”
+const SYSTEM_PROMPT_RU = `Ты — элитный сценарист виральных видео для TikTok, Reels и YouTube. 
+Твоя специализация: удержание внимания (Retention), психология зрителя и драматургия.
 
-Ты — эксперт по созданию видео-контента. Твоя задача — создать идеальный сценарий видео на основе темы и материалов.
+ПРАВИЛА ГЕНЕРАЦИИ:
 
-СТРУКТУРА ВЫХОДА (JSON):
+1. ЗАГОЛОВКИ (titleOptions): Сгенерируй 5 максимально разнообразных вариантов.
+   - Обязательно используй ключевые слова из запроса пользователя.
+   - Используй разные психологические триггеры: 
+     * "Любопытство" (Кликбейт, но честный)
+     * "Выгода" (Что получит зритель)
+     * "Страх упущенного" (Почему это нельзя пропустить)
+     * "Противоречие" (Разрыв шаблона)
+     * "Личный опыт" (История)
+   - Подстраивай заголовки под выбранную платформу (например, короткие и дерзкие для Reels).
+
+2. ХУКИ (Hooks): Предлагай 3 варианта. Они должны бить в боль или любопытство за первые 2 секунды.
+
+3. СЦЕНАРИЙ: Используй разговорный, живой язык. Избегай канцеляризмов.
+
+4. ТАБЛИЦА КАДРОВ: Детально распиши визуальный ряд. Что в кадре? Какой текст на экране? Какая музыка/звуки?
+
+5. ЧЕК-ЛИСТ: Дай советы по свету, звуку или подаче конкретно для этого сценария.
+
+ВЫХОД СТРОГО В JSON:
 {
-  "extractedText": "Краткая выжимка материалов",
-  "titleOptions": ["3 варианта цепляющих заголовков"],
-  "hookOptions": ["3 варианта мощных вступлений"],
-  "scriptMarkdown": "Полный текст сценария в Markdown",
-  "shots": [{ "t": "00:00", "frame": "Описание кадра", "onScreenText": "Текст", "voiceOver": "Речь", "broll": "Спецэффекты" }],
-  "thumbnailIdeas": ["Идеи для обложки"],
-  "hashtags": ["теги"],
-  "checklist": ["что проверить перед съемкой"]
-}
-`.trim();
+  "extractedText": "Краткая суть",
+  "titleOptions": ["Заголовок 1 (Любопытство)", "Заголовок 2 (Выгода)", "Заголовок 3 (Противоречие)", "Заголовок 4 (История)", "Заголовок 5 (Краткий/SEO)"],
+  "hookOptions": ["Хук 1", "Хук 2", "Хук 3"],
+  "scriptMarkdown": "Текст сценария...",
+  "shots": [{ "t": "0-3s", "frame": "Описание", "onScreenText": "Текст", "voiceOver": "Речь", "broll": "Звуки" }],
+  "thumbnailIdeas": ["Идея 1", "Идея 2"],
+  "hashtags": ["tag1", "tag2"],
+  "checklist": ["Совет 1", "Совет 2"]
+}`.trim();
 
-// Используем gemini-3-flash-preview — самая быстрая и стабильная модель для API-ключей
-const MODEL_NAME = "gemini-3-flash-preview";
+const MODEL_NAME = "gemini-3-pro-preview";
 
 export async function generateScenario(req: GenerateRequest): Promise<GenerateResult> {
   const apiKey = process.env.API_KEY;
-  
-  if (!apiKey || apiKey === "undefined" || apiKey === "") {
-    throw new Error(
-      "API_KEY не найден в системе. Пожалуйста, проверьте Environment Variables в Vercel и обязательно нажмите REDEPLOY во вкладке Deployments."
-    );
-  }
+  if (!apiKey) throw new Error("API_KEY is missing");
 
-  // Создаем экземпляр AI непосредственно перед вызовом для актуальности ключа
   const ai = new GoogleGenAI({ apiKey });
-
   const parts: any[] = [];
   
-  if (req.input.attachments && req.input.attachments.length > 0) {
+  if (req.input.attachments?.length) {
     for (const a of req.input.attachments) {
-      parts.push({
-        inlineData: {
-          mimeType: a.mimeType,
-          data: a.dataBase64
-        }
-      });
+      parts.push({ inlineData: { mimeType: a.mimeType, data: a.dataBase64 } });
     }
   }
 
-  const aspectRatio = req.options.platform === 'youtube' ? '16:9' : '9:16';
-  
+  const keywords = req.input.text ? req.input.text.split(' ').slice(0, 10).join(', ') : "контент из вложений";
+
   const promptInput = `
-Topic: ${req.input.text || "Проанализируй вложения и предложи сценарий."}
-Platform: ${req.options.platform}
-Duration: ${req.options.durationSec}s
-Style: ${req.options.style}
-Goal: ${req.options.direction}
-CTA: ${req.options.ctaStrength}
-Language: Russian
+ТЕМА ПОЛЬЗОВАТЕЛЯ: ${req.input.text || "Проанализируй вложения и предложи тему видео"}
+КЛЮЧЕВЫЕ СЛОВА ДЛЯ ЗАГОЛОВКОВ: ${keywords}
+ПЛАТФОРМА: ${req.options.platform}
+ДЛИТЕЛЬНОСТЬ: ${req.options.durationSec} сек
+СТИЛЬ: ${req.options.style}
+ЦЕЛЬ: ${req.options.direction}
+ПРИЗЫВ (CTA): ${req.options.ctaStrength}
+ЯЗЫК: Русский
 `.trim();
 
   parts.push({ text: promptInput });
@@ -69,34 +75,22 @@ Language: Russian
       config: {
         systemInstruction: SYSTEM_PROMPT_RU,
         responseMimeType: "application/json",
-        // Для Flash модели устанавливаем минимальный бюджет размышлений для скорости
-        thinkingConfig: { thinkingBudget: 0 } 
+        thinkingConfig: { thinkingBudget: 16000 } // Снизил бюджет для ускорения, но оставил для качества
       }
     });
 
-    const raw = response.text || "";
-    const cleaned = stripCodeFences(raw);
+    const rawText = response.text || "";
+    const cleanJson = extractJson(stripCodeFences(rawText));
     
-    return JSON.parse(cleaned) as GenerateResult;
+    try {
+      return JSON.parse(cleanJson) as GenerateResult;
+    } catch (parseError) {
+      console.error("Failed to parse JSON. Raw text:", rawText);
+      console.error("Cleaned text attempted:", cleanJson);
+      throw new Error("Модель вернула некорректный формат. Попробуйте уточнить запрос.");
+    }
   } catch (e: any) {
-    const errorMsg = e.message || "";
-    
-    // 401 / OAuth2 error usually means model selection issue or key mismatch
-    if (errorMsg.includes("401") || errorMsg.includes("not supported by this API")) {
-      throw new Error(
-        "ОШИБКА ДОСТУПА (401).\n\n" +
-        "Ваш API Key не может авторизоваться. \n" +
-        "1. Убедитесь, что ключ создан в Google AI Studio.\n" +
-        "2. Проверьте, что в Vercel ключ вставлен БЕЗ лишних пробелов.\n" +
-        "3. ОБЯЗАТЕЛЬНО сделайте Redeploy после смены ключа."
-      );
-    }
-
-    if (errorMsg.includes("leaked") || errorMsg.includes("403")) {
-      throw new Error("КЛЮЧ ЗАБЛОКИРОВАН (Leaked). Google обнаружил его в сети. Создайте НОВЫЙ ключ в AI Studio и обновите его в Vercel.");
-    }
-    
-    console.error("Gemini API Error:", e);
-    throw new Error(errorMsg || "Ошибка генерации. Попробуйте еще раз через минуту.");
+    console.error("Gemini Error:", e);
+    throw new Error(e.message || "Ошибка API. Попробуйте еще раз.");
   }
 }
