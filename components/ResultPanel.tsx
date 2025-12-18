@@ -1,14 +1,69 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { GenerateResult } from "../types";
+
+interface SectionProps {
+  title: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+  icon?: React.ReactNode;
+}
+
+const CollapsibleSection: React.FC<SectionProps> = ({ title, isOpen, onToggle, children, icon }) => (
+  <div className="border-b border-zinc-800/50 last:border-0 overflow-hidden">
+    <button
+      onClick={onToggle}
+      className="w-full flex items-center justify-between px-6 py-4 hover:bg-zinc-800/20 transition-colors text-left"
+    >
+      <div className="flex items-center gap-3">
+        {icon && <span className="text-emerald-500/70">{icon}</span>}
+        <span className="text-[11px] font-black uppercase tracking-widest text-zinc-400">{title}</span>
+      </div>
+      <motion.div
+        animate={{ rotate: isOpen ? 180 : 0 }}
+        transition={{ duration: 0.3, ease: "easeInOut" }}
+        className="text-zinc-600"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </motion.div>
+    </button>
+    <AnimatePresence initial={false}>
+      {isOpen && (
+        <motion.div
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: "auto", opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          transition={{ duration: 0.3, ease: "easeInOut" }}
+        >
+          <div className="px-6 pb-6 pt-2 text-zinc-300">
+            {children}
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  </div>
+);
 
 export function ResultPanel(props: {
   loading: boolean;
   error: string | null;
-  markdown: string;
+  result: GenerateResult | null;
   onCopy: () => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    script: true,
+    shots: true,
+    hooks: false,
+    titles: false,
+    extra: false
+  });
+
+  const toggleSection = (id: string) => {
+    setOpenSections(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   const handleCopy = () => {
     props.onCopy();
@@ -17,9 +72,10 @@ export function ResultPanel(props: {
   };
 
   const handleDownload = (ext: 'md' | 'txt') => {
-    if (!props.markdown) return;
+    if (!props.result) return;
+    const content = props.result.scriptMarkdown; // Simplified for download
     const element = document.createElement("a");
-    const file = new Blob([props.markdown], { type: 'text/plain' });
+    const file = new Blob([content], { type: 'text/plain' });
     element.href = URL.createObjectURL(file);
     element.download = `scenario_${new Date().getTime()}.${ext}`;
     document.body.appendChild(element);
@@ -27,80 +83,26 @@ export function ResultPanel(props: {
     document.body.removeChild(element);
   };
 
-  const handleShare = async () => {
-    if (!props.markdown) return;
-
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'Сценарий от Сценарист AI',
-          text: props.markdown,
-        });
-      } catch (err) {
-        console.error("Error sharing:", err);
-      }
-    } else {
-      // Fallback: Mailto
-      const subject = encodeURIComponent("Мой новый сценарий для видео");
-      const body = encodeURIComponent(props.markdown);
-      const mailto = `mailto:?subject=${subject}&body=${body}`;
-      window.open(mailto, '_blank');
-    }
-  };
-
   return (
     <div className="h-full flex flex-col rounded-[2.5rem] border border-zinc-800/50 bg-[#09090b] shadow-2xl overflow-hidden relative">
-      {/* Header */}
+      {/* Main Header */}
       <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between px-6 py-5 gap-4 border-b border-zinc-800/50 bg-zinc-900/20">
         <div className="flex items-center gap-3">
            <motion.div 
              animate={props.loading ? { scale: [1, 1.2, 1], opacity: [1, 0.5, 1] } : {}}
              transition={{ duration: 1.5, repeat: Infinity }}
-             className={`h-2 w-2 rounded-full transition-all duration-500 ${props.loading ? "bg-emerald-500" : props.markdown ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]" : "bg-zinc-800"}`}
+             className={`h-2 w-2 rounded-full transition-all duration-500 ${props.loading ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" : props.result ? "bg-emerald-400" : "bg-zinc-800"}`}
            />
            <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">
-             {props.loading ? "Генерация смыслов..." : "Результат"}
+             {props.loading ? "Генерация..." : "Сценарий"}
            </span>
         </div>
         
-        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+        <div className="flex items-center gap-2">
             <AnimatePresence>
-              {props.markdown && !props.loading && (
-                <motion.div 
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="flex gap-2"
-                >
-                  <motion.button 
-                    whileHover={{ scale: 1.05, backgroundColor: "rgba(39,39,42,0.8)" }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={handleShare}
-                    className="flex items-center gap-1.5 rounded-xl bg-zinc-800/30 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-emerald-400 border border-emerald-500/20"
-                    title="Поделиться"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-                    SHARE
-                  </motion.button>
-                  <motion.button 
-                    whileHover={{ scale: 1.05, backgroundColor: "rgba(39,39,42,0.8)" }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => handleDownload('md')}
-                    className="flex items-center gap-1.5 rounded-xl bg-zinc-800/30 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-zinc-400 border border-zinc-800"
-                    title="Скачать Markdown"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    .MD
-                  </motion.button>
-                  <motion.button 
-                    whileHover={{ scale: 1.05, backgroundColor: "rgba(39,39,42,0.8)" }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => handleDownload('txt')}
-                    className="flex items-center gap-1.5 rounded-xl bg-zinc-800/30 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-zinc-400 border border-zinc-800"
-                    title="Скачать Текст"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    .TXT
-                  </motion.button>
+              {props.result && !props.loading && (
+                <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} className="flex gap-2">
+                  <button onClick={() => handleDownload('md')} className="px-3 py-2 rounded-xl bg-zinc-800/30 border border-zinc-800 text-[10px] font-bold text-zinc-500 hover:text-zinc-300">.MD</button>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -109,104 +111,148 @@ export function ResultPanel(props: {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={handleCopy}
-              disabled={!props.markdown || props.loading}
-              className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-emerald-400 hover:bg-emerald-500/20 transition-all disabled:opacity-30 disabled:grayscale"
+              disabled={!props.result || props.loading}
+              className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-30 transition-all"
             >
               {copied ? "Готово!" : "Копировать"}
             </motion.button>
         </div>
       </div>
 
-      {/* Content Area */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-0 bg-zinc-950/20">
+      <div className="flex-1 overflow-y-auto custom-scrollbar bg-zinc-950/20">
         <AnimatePresence mode="wait">
           {props.loading ? (
-            <motion.div
-              key="loading"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex flex-col items-center justify-center h-full space-y-8 p-12"
-            >
-              <div className="relative">
+            <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center h-full space-y-8 p-12">
+               <div className="relative">
                 <motion.div 
                   animate={{ rotate: 360 }}
-                  transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                  className="w-20 h-20 border-t-2 border-r-2 border-emerald-500 rounded-full"
-                />
-                <motion.div 
-                  animate={{ rotate: -360 }}
                   transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                  className="absolute inset-2 border-b-2 border-l-2 border-emerald-500/30 rounded-full"
+                  className="w-16 h-16 border-t-2 border-emerald-500 rounded-full"
                 />
-              </div>
-              <div className="text-center space-y-2">
-                <motion.p 
-                  animate={{ opacity: [0.5, 1, 0.5] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                  className="text-base font-bold text-zinc-200 tracking-tight"
-                >
-                  Генерируем уникальный сценарий
-                </motion.p>
-                <div className="flex flex-col gap-1.5 opacity-40 max-w-[200px] mx-auto">
-                   <div className="h-2 w-full bg-zinc-800 rounded-full overflow-hidden">
-                      <motion.div 
-                        initial={{ x: "-100%" }}
-                        animate={{ x: "100%" }}
-                        transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                        className="h-full w-1/2 bg-emerald-500/50"
-                      />
-                   </div>
-                   <div className="h-2 w-3/4 bg-zinc-800 rounded-full mx-auto" />
-                </div>
-              </div>
+               </div>
+               <p className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em] animate-pulse">Архитектура смыслов...</p>
             </motion.div>
           ) : props.error ? (
-            <motion.div 
-              key="error" 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="h-full flex items-center justify-center p-8"
-            >
-               <div className="max-w-sm text-center p-8 rounded-[2rem] bg-rose-500/5 border border-rose-500/10 shadow-lg">
-                  <div className="w-12 h-12 rounded-full bg-rose-500/10 flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-6 h-6 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                  </div>
-                  <p className="text-xs font-bold text-rose-400 mb-2 uppercase tracking-widest">Ошибка генерации</p>
-                  <p className="text-sm text-zinc-400 leading-relaxed">{props.error}</p>
+            <div className="h-full flex items-center justify-center p-8 text-center">
+               <div className="max-w-xs space-y-3">
+                 <div className="w-10 h-10 rounded-full bg-rose-500/10 flex items-center justify-center mx-auto text-rose-500">
+                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                 </div>
+                 <p className="text-sm text-zinc-400 leading-relaxed font-medium">{props.error}</p>
                </div>
-            </motion.div>
-          ) : props.markdown ? (
-            <motion.div 
-                key="result"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, ease: "easeOut" }}
-                className="p-8 md:p-10 prose prose-invert max-w-none"
-            >
-              <div className="font-sans text-[15px] md:text-[16px] leading-[1.8] text-zinc-100 tracking-tight whitespace-pre-wrap">
-                {props.markdown}
-              </div>
+            </div>
+          ) : props.result ? (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col">
+              
+              <CollapsibleSection 
+                title="Заголовки" 
+                isOpen={openSections.titles} 
+                onToggle={() => toggleSection('titles')}
+                icon={<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>}
+              >
+                <div className="grid gap-2">
+                  {props.result.titleOptions.map((title, i) => (
+                    <div key={i} className="flex gap-3 items-start p-3 rounded-xl bg-zinc-900/40 border border-zinc-800/50">
+                      <span className="text-[10px] font-black text-zinc-700 mt-0.5">{i+1}</span>
+                      <p className="text-sm font-bold text-zinc-200">{title}</p>
+                    </div>
+                  ))}
+                </div>
+              </CollapsibleSection>
+
+              <CollapsibleSection 
+                title="Хуки" 
+                isOpen={openSections.hooks} 
+                onToggle={() => toggleSection('hooks')}
+                icon={<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>}
+              >
+                <div className="grid gap-2">
+                  {props.result.hookOptions.map((hook, i) => (
+                    <div key={i} className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/10">
+                      <p className="text-sm font-medium italic text-emerald-100/80">«{hook}»</p>
+                    </div>
+                  ))}
+                </div>
+              </CollapsibleSection>
+
+              <CollapsibleSection 
+                title="Сценарий" 
+                isOpen={openSections.script} 
+                onToggle={() => toggleSection('script')}
+                icon={<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>}
+              >
+                <div className="prose prose-invert max-w-none">
+                  <p className="text-[15px] leading-[1.8] text-zinc-100 whitespace-pre-wrap selection:bg-emerald-500/30">
+                    {props.result.scriptMarkdown}
+                  </p>
+                </div>
+              </CollapsibleSection>
+
+              <CollapsibleSection 
+                title="План съёмки" 
+                isOpen={openSections.shots} 
+                onToggle={() => toggleSection('shots')}
+                icon={<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>}
+              >
+                <div className="overflow-x-auto -mx-2">
+                  <table className="w-full text-left text-[11px] border-separate border-spacing-y-1">
+                    <thead>
+                      <tr className="text-zinc-600 font-bold uppercase tracking-wider">
+                        <th className="px-2 py-2">Время</th>
+                        <th className="px-2 py-2">Кадр</th>
+                        <th className="px-2 py-2">Текст</th>
+                        <th className="px-2 py-2">VO</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {props.result.shots.map((shot, i) => (
+                        <tr key={i} className="bg-zinc-900/30 rounded-lg overflow-hidden transition-colors hover:bg-zinc-900/50">
+                          <td className="px-2 py-3 font-mono text-emerald-500 rounded-l-xl">{shot.t}</td>
+                          <td className="px-2 py-3 text-zinc-300 font-medium">{shot.frame}</td>
+                          <td className="px-2 py-3 text-emerald-100/60 italic">{shot.onScreenText}</td>
+                          <td className="px-2 py-3 text-zinc-400 rounded-r-xl">{shot.voiceOver}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CollapsibleSection>
+
+              <CollapsibleSection 
+                title="Дополнительно" 
+                isOpen={openSections.extra} 
+                onToggle={() => toggleSection('extra')}
+                icon={<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>}
+              >
+                <div className="space-y-6">
+                  {props.result.checklist && (
+                    <div className="space-y-3">
+                      <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600">Чек-лист по реализации</h4>
+                      <ul className="grid gap-2">
+                        {props.result.checklist.map((item, i) => (
+                          <li key={i} className="flex gap-3 items-start p-2 rounded-lg bg-zinc-900/20 border border-zinc-800/30">
+                            <div className="mt-1 w-3 h-3 rounded-full border border-emerald-500/50 flex-shrink-0" />
+                            <span className="text-xs text-zinc-400">{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {props.result.hashtags && (
+                    <div className="flex flex-wrap gap-2">
+                      {props.result.hashtags.map((tag, i) => (
+                        <span key={i} className="text-[10px] font-bold text-emerald-500 bg-emerald-500/5 px-2 py-1 rounded-md border border-emerald-500/10 tracking-tight lowercase">#{tag}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CollapsibleSection>
             </motion.div>
           ) : (
-            <motion.div 
-              key="empty" 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="h-full flex flex-col items-center justify-center text-zinc-800 space-y-6 p-12"
-            >
-               <motion.div 
-                 animate={{ y: [0, -10, 0] }}
-                 transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                 className="w-20 h-20 rounded-3xl bg-zinc-900 border border-zinc-800 flex items-center justify-center"
-               >
-                 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
-               </motion.div>
-               <div className="text-center">
-                   <p className="text-sm font-bold text-zinc-600">Ваш сценарий появится здесь</p>
-                   <p className="text-[11px] text-zinc-700 max-w-[240px] mt-2 leading-relaxed">Настройте параметры слева и нажмите кнопку создания, чтобы начать магию ИИ.</p>
-               </div>
-            </motion.div>
+            <div className="h-full flex flex-col items-center justify-center text-zinc-800 space-y-4">
+               <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="opacity-20"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+               <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-20">Ожидание задачи</p>
+            </div>
           )}
         </AnimatePresence>
       </div>

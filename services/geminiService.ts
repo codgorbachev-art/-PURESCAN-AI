@@ -29,16 +29,17 @@ const SYSTEM_PROMPT_RU = `Ты — элитный сценарист вирал�
 ВЫХОД СТРОГО В JSON:
 {
   "extractedText": "Краткая суть",
-  "titleOptions": ["Заголовок 1 (Любопытство)", "Заголовок 2 (Выгода)", "Заголовок 3 (Противоречие)", "Заголовок 4 (История)", "Заголовок 5 (Краткий/SEO)"],
+  "titleOptions": ["Заголовок 1", "Заголовок 2", "Заголовок 3", "Заголовок 4", "Заголовок 5"],
   "hookOptions": ["Хук 1", "Хук 2", "Хук 3"],
   "scriptMarkdown": "Текст сценария...",
   "shots": [{ "t": "0-3s", "frame": "Описание", "onScreenText": "Текст", "voiceOver": "Речь", "broll": "Звуки" }],
-  "thumbnailIdeas": ["Идея 1", "Идея 2"],
+  "thumbnailIdeas": ["Подробное описание визуальной идеи для обложки 1", "Подробное описание визуальной идеи для обложки 2", "Подробное описание визуальной идеи для обложки 3"],
   "hashtags": ["tag1", "tag2"],
   "checklist": ["Совет 1", "Совет 2"]
 }`.trim();
 
-const MODEL_NAME = "gemini-3-pro-preview";
+const TEXT_MODEL_NAME = "gemini-3-pro-preview";
+const IMAGE_MODEL_NAME = "gemini-2.5-flash-image";
 
 export async function generateScenario(req: GenerateRequest): Promise<GenerateResult> {
   const apiKey = process.env.API_KEY;
@@ -53,44 +54,62 @@ export async function generateScenario(req: GenerateRequest): Promise<GenerateRe
     }
   }
 
-  const keywords = req.input.text ? req.input.text.split(' ').slice(0, 10).join(', ') : "контент из вложений";
-
   const promptInput = `
-ТЕМА ПОЛЬЗОВАТЕЛЯ: ${req.input.text || "Проанализируй вложения и предложи тему видео"}
-КЛЮЧЕВЫЕ СЛОВА ДЛЯ ЗАГОЛОВКОВ: ${keywords}
+ТЕМА: ${req.input.text || "Проанализируй вложения"}
 ПЛАТФОРМА: ${req.options.platform}
 ДЛИТЕЛЬНОСТЬ: ${req.options.durationSec} сек
 СТИЛЬ: ${req.options.style}
 ЦЕЛЬ: ${req.options.direction}
-ПРИЗЫВ (CTA): ${req.options.ctaStrength}
-ЯЗЫК: Русский
 `.trim();
 
   parts.push({ text: promptInput });
 
-  try {
-    const response = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents: { parts },
-      config: {
-        systemInstruction: SYSTEM_PROMPT_RU,
-        responseMimeType: "application/json",
-        thinkingConfig: { thinkingBudget: 16000 } // Снизил бюджет для ускорения, но оставил для качества
-      }
-    });
-
-    const rawText = response.text || "";
-    const cleanJson = extractJson(stripCodeFences(rawText));
-    
-    try {
-      return JSON.parse(cleanJson) as GenerateResult;
-    } catch (parseError) {
-      console.error("Failed to parse JSON. Raw text:", rawText);
-      console.error("Cleaned text attempted:", cleanJson);
-      throw new Error("Модель вернула некорректный формат. Попробуйте уточнить запрос.");
+  const response = await ai.models.generateContent({
+    model: TEXT_MODEL_NAME,
+    contents: { parts },
+    config: {
+      systemInstruction: SYSTEM_PROMPT_RU,
+      responseMimeType: "application/json",
+      thinkingConfig: { thinkingBudget: 16000 }
     }
-  } catch (e: any) {
-    console.error("Gemini Error:", e);
-    throw new Error(e.message || "Ошибка API. Попробуйте еще раз.");
+  });
+
+  const rawText = response.text || "";
+  return JSON.parse(extractJson(stripCodeFences(rawText))) as GenerateResult;
+}
+
+/**
+ * Генерирует визуальное превью для идеи обложки
+ */
+export async function generateThumbnailVisual(idea: string): Promise<string> {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) throw new Error("API_KEY is missing");
+
+  const ai = new GoogleGenAI({ apiKey });
+  const response = await ai.models.generateContent({
+    model: IMAGE_MODEL_NAME,
+    contents: {
+      parts: [
+        {
+          text: `Create an ultra-professional, hyper-realistic viral YouTube thumbnail visual based on this concept: "${idea}". 
+          The scene should have cinematic lighting, dynamic composition, and high-contrast colors (e.g., complementary color schemes). 
+          Ensure a strong central focal point with blurred background (bokeh). Style should be clean, modern, and high-fidelity. 
+          ABSOLUTELY NO TEXT, NO WATERMARKS, NO INTERFACE ELEMENTS. The image should look like a high-end photography or professional 3D render.`,
+        },
+      ],
+    },
+    config: {
+      imageConfig: {
+        aspectRatio: "16:9",
+      },
+    },
+  });
+
+  for (const part of response.candidates[0].content.parts) {
+    if (part.inlineData) {
+      return `data:image/png;base64,${part.inlineData.data}`;
+    }
   }
+  
+  throw new Error("Не удалось извлечь изображение из ответа модели");
 }
