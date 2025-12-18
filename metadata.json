@@ -1,8 +1,7 @@
 {
-  "name": "Purescan Ai",
-  "description": "Продвинутый веб-интерфейс для AI-анализа состава продуктов. Glass UI, Framer Motion и WebGL эффекты.",
+  "name": "Sceenarist AI",
+  "description": "Generate professional video scripts for social media from text or images using Gemini 3.",
   "requestFramePermissions": [
-    "camera",
-    "microphone"
+    "camera"
   ]
 }

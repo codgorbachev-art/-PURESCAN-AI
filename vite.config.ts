@@ -1,12 +1,26 @@
+
 import { defineConfig, loadEnv } from 'vite';
-import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, (process as any).cwd(), '');
+  // Загружаем переменные окружения из системного процесса (Vercel)
+  const env = loadEnv(mode, process.cwd(), '');
+  
   return {
-    plugins: [react()],
     define: {
-      'process.env.API_KEY': JSON.stringify(env.API_KEY)
+      // Подменяем обращение к process.env.API_KEY на реальное значение ключа
+      'process.env.API_KEY': JSON.stringify(env.API_KEY || process.env.API_KEY),
+      // Создаем объект process.env для совместимости в браузере
+      'process.env': {
+        API_KEY: env.API_KEY || process.env.API_KEY
+      }
+    },
+    build: {
+      outDir: 'dist',
+      rollupOptions: {
+        input: {
+          main: './index.html'
+        }
+      }
     }
   };
 });
