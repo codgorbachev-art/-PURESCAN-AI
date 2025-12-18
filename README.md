@@ -1,26 +1,20 @@
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+</div>
 
-# Сценарист AI — Video Script Engine
+# Run and deploy your AI Studio app
 
-Профессиональный инструмент для генерации сценариев видео (Reels, TikTok, YouTube) на базе Gemini 3 Flash.
+This contains everything you need to run your app locally.
 
-## Особенности
-- **Adaptive Engine:** Подстраивается под длительность от 10 сек до 30 минут.
-- **X3 Quality:** Тройной цикл анализа, проверки и генерации.
-- **Интеллектуальный анализ:** Поддержка вложений (фото, PDF, текст).
-- **Тайминги:** Точный расчет речи и визуальных планов.
+View your app in AI Studio: https://ai.studio/apps/drive/1GZwu1rgczYUiR96zfmyLAYITM5JYE12e
 
-## Технологии
-- React 19 + TypeScript
-- Google Gemini API (@google/genai)
-- Tailwind CSS
-- Framer Motion
+## Run Locally
 
-## Установка и запуск
+**Prerequisites:**  Node.js
 
-1. Клонируйте репозиторий.
-2. Установите зависимости: `npm install`.
-3. Создайте файл `.env` и добавьте туда ваш ключ: `API_KEY=ваш_ключ`.
-4. Запустите проект: `npm run dev`.
 
-## Публикация
-Проект готов к деплою на Vercel или Netlify. Не забудьте добавить переменную окружения `API_KEY` в настройках провайдера.
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`

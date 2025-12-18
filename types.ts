@@ -1,64 +1,59 @@
-export interface Attachment {
+export type ViewState = 'LANDING' | 'AUTH' | 'DASHBOARD' | 'SCAN' | 'RESULT' | 'SUBSCRIPTION' | 'PROFILE';
+
+export type SubscriptionPlan = 'FREE' | 'PRO' | 'ULTRA';
+
+export interface User {
+  id: string;
+  email?: string;
   name: string;
-  mimeType: string;
-  dataBase64: string;
+  username?: string; // Telegram username
+  telegramId?: string;
+  photoUrl?: string; // Telegram avatar
+  plan: SubscriptionPlan;
+  scansLeft: number; // For free tier
+  allergies: string[];
+  settings: {
+    notifications: boolean;
+    darkMode: boolean;
+  }
 }
 
-export interface GenerateInput {
-  text: string;
-  attachments: Attachment[];
+export interface HistoryItem {
+  id: string;
+  date: string;
+  productName: string;
+  score: string;
+  status: 'safe' | 'warning' | 'danger';
+  rawResult: ScanResult; // Store full result to reopen it
 }
 
-export interface GenerateOptions {
-  style: "storytelling" | "provocative" | "educational" | "entertaining";
-  direction: "sale" | "expertise" | "ads" | "engagement";
-  durationSec: number;
-  platform: "tiktok" | "reels" | "shorts" | "youtube";
-  ctaStrength: "soft" | "hard";
+export interface Additive {
+  code: string; // e.g., "E202" or name "Palm Oil"
+  name: string;
+  riskLevel: 'low' | 'medium' | 'high';
+  description: string;
 }
 
-export interface GenerateRequest {
-  input: GenerateInput;
-  options: GenerateOptions;
-  client: {
-    tz: string;
-    uiVersion: string;
-  };
+export interface ScanResult {
+  id: string;
+  productName?: string;
+  status: 'safe' | 'warning' | 'danger';
+  score: string;
+  verdict: string;
+  details: string; // Summary text
+  nutrients: {
+    label: string;
+    value: string;
+    status: 'good' | 'bad' | 'neutral';
+    percentage?: number; // 0-100 for visualization
+  }[];
+  additives: Additive[];
+  pros: string[];
+  cons: string[];
 }
 
-export interface Shot {
-  t: string;
-  frame: string;
-  onScreenText: string;
-  voiceOver: string;
-  broll: string;
-}
-
-export interface GenerateResult {
-  extractedText: string;
-  titleOptions: string[];
-  hookOptions: string[];
-  scriptMarkdown: string;
-  shots: Shot[];
-  thumbnailIdeas: string[];
-  hashtags: string[];
-  checklist: string[];
-}
-
-export interface Limits {
-  isPro: boolean;
-  dailyLimit: number;
-  usedToday: number;
-  remainingToday: number;
-}
-
-export interface GenerateResponse {
-  ok: boolean;
-  requestId: string;
-  limits: Limits;
-  result: GenerateResult;
-  usage: {
-    model: string;
-  };
-  errors: string[];
+export enum AppState {
+  IDLE = 'IDLE',
+  SCANNING = 'SCANNING',
+  RESULT = 'RESULT',
 }
